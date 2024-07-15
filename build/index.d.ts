@@ -1,14 +1,16 @@
 import { vec } from '@basementuniverse/vec';
+import { Rectangle } from './bitmap-decompose';
 export type TileMapOptionsData = Partial<Omit<TileMapOptions, 'preRender' | 'postRender' | 'preGenerateChunk' | 'postGenerateChunk' | 'debug'>> & {
     layers?: TileMapLayerOptionsData[];
 };
 export type TileMapLayerOptionsData = Omit<TileMapLayerOptions, 'preRenderTile' | 'postRenderTile'> & {
-    tiles?: Omit<TileDefinition, 'image'> & {
+    tiles?: (Omit<TileDefinition, 'image'> & {
         imageName: string;
-        [key: string]: any;
-    }[];
+    })[];
+    width?: number;
+    data: number[];
 };
-export type TileMapOptions<T extends TileDefinition | undefined = undefined> = {
+export type TileMapOptions = {
     /**
      * The bounds of the tile map, measured in tiles
      *
@@ -48,7 +50,7 @@ export type TileMapOptions<T extends TileDefinition | undefined = undefined> = {
      * Defined in ascending render order; layers[0] will be rendered first, then
      * layers[1] on top of that, etc.
      */
-    layers: TileMapLayerOptions<T>[];
+    layers: TileMapLayerOptions[];
     /**
      * The size of each render chunk, measured in tiles
      *
@@ -81,13 +83,13 @@ export type TileMapOptions<T extends TileDefinition | undefined = undefined> = {
      *
      * @param context The context that the tilemap is being rendered into
      */
-    preRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec, position: vec, scale?: number) => void;
+    preRender?: (context: CanvasRenderingContext2D, tileMap: TileMap, screen: vec, position: vec, scale?: number) => void;
     /**
      * Optional hook called after rendering the tilemap
      *
      * @param context The context that the tilemap is being rendered into
      */
-    postRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec, position: vec, scale?: number) => void;
+    postRender?: (context: CanvasRenderingContext2D, tileMap: TileMap, screen: vec, position: vec, scale?: number) => void;
     /**
      * Optional hook called before generating a chunk
      *
@@ -100,14 +102,14 @@ export type TileMapOptions<T extends TileDefinition | undefined = undefined> = {
      *
      * @param context A context for the chunk's canvas
      */
-    preGenerateChunk?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk | [TileMapChunk, boolean];
+    preGenerateChunk?: (context: CanvasRenderingContext2D, tileMap: TileMap, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk | [TileMapChunk, boolean];
     /**
      * Optional hook called after generating a chunk
      *
      * @param canvas The chunk's canvas
      * @param context A context for the chunk's canvas
      */
-    postGenerateChunk?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk;
+    postGenerateChunk?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk;
     /**
      * Optional debug options
      *
@@ -117,7 +119,7 @@ export type TileMapOptions<T extends TileDefinition | undefined = undefined> = {
      */
     debug?: Partial<TileMapDebugOptions> | boolean;
 };
-export type TileMapLayerOptions<T extends TileDefinition | undefined = undefined> = {
+export type TileMapLayerOptions = {
     /**
      * The name of this layer
      */
@@ -129,7 +131,7 @@ export type TileMapLayerOptions<T extends TileDefinition | undefined = undefined
      *
      * The layer data will reference indexes in this array
      */
-    tiles?: T[];
+    tiles?: TileDefinition[];
     /**
      * Layer data, represented as a 2d-array of indexes into the images array
      *
@@ -160,7 +162,7 @@ export type TileMapLayerOptions<T extends TileDefinition | undefined = undefined
      *
      * @param context A context for the current chunk's canvas
      */
-    preRenderTile?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec, tilePosition: vec) => void;
+    preRenderTile?: (context: CanvasRenderingContext2D, tileMap: TileMap, layer: TileMapLayerOptions, chunkPosition: vec, tilePosition: vec) => void;
     /**
      * Optional hook called after rendering a tile
      *
@@ -170,7 +172,7 @@ export type TileMapLayerOptions<T extends TileDefinition | undefined = undefined
      * @param canvas The current chunk's canvas
      * @param context A context for the current chunk's canvas
      */
-    postRenderTile?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec, tilePosition: vec) => void;
+    postRenderTile?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap, layer: TileMapLayerOptions, chunkPosition: vec, tilePosition: vec) => void;
 };
 type TileMapDebugOptions = {
     showOrigin: boolean;
@@ -202,13 +204,14 @@ export declare enum TileAlignment {
 export type TileDefinition = {
     name: string;
     image: TileMapImage;
+    [key: string]: any;
 };
 type TileMapImage = HTMLImageElement | HTMLCanvasElement;
 type TileMapChunk = {
     chunkPosition: vec;
     image: HTMLCanvasElement;
 };
-export declare class TileMap<T extends TileDefinition | undefined = undefined> {
+export declare class TileMap {
     private static readonly DEFAULT_OPTIONS;
     private static readonly DEBUG_ORIGIN_COLOUR;
     private static readonly DEBUG_ORIGIN_LINE_WIDTH;
@@ -221,16 +224,18 @@ export declare class TileMap<T extends TileDefinition | undefined = undefined> {
     private static readonly DEBUG_TILE_BORDER_LINE_WIDTH;
     private options;
     private chunkBuffer;
-    constructor(options?: Partial<TileMapOptions<T>>);
+    constructor(options?: Partial<TileMapOptions>);
     /**
-     * Get a minimal set of rectangles which cover the tiles in a given layer
+     * Get a (roughly minimal) set of rectangles which cover the tiles in a
+     * given layer
      *
      * @param layerName The name of the layer to get rectangles for
      * @param fieldName We will check the truthyness of this field in the
      * tile definition
-     * @param tileBounds Optional bounds to check
+     * @param tileBounds Optional bounds to check within, relative to bounds
+     * defined in options if any exist, otherwise relative to (0, 0)
      */
-    getLayerRectangles(layerName: string, fieldName?: string, tileBounds?: Bounds): any;
+    getLayerRectangles(layerName: string, fieldName?: keyof TileDefinition, tileBounds?: Bounds): Rectangle[];
     /**
      * Get the tile at a given position and in the specified layer
      *
@@ -239,8 +244,8 @@ export declare class TileMap<T extends TileDefinition | undefined = undefined> {
      *
      * If no tile exists at this position, return null
      */
-    getTileAtPosition(position: vec, layerName?: string): T | null | {
-        [name: string]: T | null;
+    getTileAtPosition(position: vec, layerName?: string): TileDefinition | null | {
+        [name: string]: TileDefinition | null;
     };
     private getTileAtPositionInLayer;
     private hashVector;
@@ -265,5 +270,7 @@ export declare function tileMapOptionsContentProcessor(content: Record<string, {
     type: string;
     content: TileMapOptionsData;
     status: number;
-}): Promise<void>;
+}, options?: Partial<{
+    decompressData: boolean;
+}>): Promise<void>;
 export {};

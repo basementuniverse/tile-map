@@ -1,5 +1,8 @@
-import { vec } from '@basementuniverse/vec';
 import { LRUMap } from 'lru_map';
+import decode from 'fast-rle/decode';
+import { vec } from '@basementuniverse/vec';
+import { clamp, chunk } from '@basementuniverse/utils';
+import { bitmapToRectangles, Rectangle } from './bitmap-decompose';
 
 export type TileMapOptionsData = Partial<Omit<
   TileMapOptions,
@@ -17,15 +20,14 @@ export type TileMapLayerOptionsData = Omit<
   | 'preRenderTile'
   | 'postRenderTile'
 > & {
-  tiles?: Omit<TileDefinition, 'image'> & {
+  tiles?: (Omit<TileDefinition, 'image'> & {
     imageName: string;
-    [key: string]: any;
-  }[];
+  })[];
+  width?: number;
+  data: number[];
 };
 
-export type TileMapOptions<
-  T extends TileDefinition | undefined = undefined
-> = {
+export type TileMapOptions = {
   /**
    * The bounds of the tile map, measured in tiles
    *
@@ -70,7 +72,7 @@ export type TileMapOptions<
    * Defined in ascending render order; layers[0] will be rendered first, then
    * layers[1] on top of that, etc.
    */
-  layers: TileMapLayerOptions<T>[];
+  layers: TileMapLayerOptions[];
 
   /**
    * The size of each render chunk, measured in tiles
@@ -109,7 +111,7 @@ export type TileMapOptions<
    */
   preRender?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap<T>,
+    tileMap: TileMap,
     screen: vec,
     position: vec,
     scale?: number
@@ -122,7 +124,7 @@ export type TileMapOptions<
    */
   postRender?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap<T>,
+    tileMap: TileMap,
     screen: vec,
     position: vec,
     scale?: number
@@ -142,7 +144,7 @@ export type TileMapOptions<
    */
   preGenerateChunk?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap<T>,
+    tileMap: TileMap,
     tileBounds: Bounds,
     chunkPosition: vec
   ) => TileMapChunk | [TileMapChunk, boolean];
@@ -156,7 +158,7 @@ export type TileMapOptions<
   postGenerateChunk?: (
     canvas: HTMLCanvasElement,
     context: CanvasRenderingContext2D,
-    tileMap: TileMap<T>,
+    tileMap: TileMap,
     tileBounds: Bounds,
     chunkPosition: vec
   ) => TileMapChunk;
@@ -171,9 +173,7 @@ export type TileMapOptions<
   debug?: Partial<TileMapDebugOptions> | boolean;
 };
 
-export type TileMapLayerOptions<
-  T extends TileDefinition | undefined = undefined
-> = {
+export type TileMapLayerOptions = {
   /**
    * The name of this layer
    */
@@ -186,7 +186,7 @@ export type TileMapLayerOptions<
    *
    * The layer data will reference indexes in this array
    */
-  tiles?: T[];
+  tiles?: TileDefinition[];
 
   /**
    * Layer data, represented as a 2d-array of indexes into the images array
@@ -224,8 +224,8 @@ export type TileMapLayerOptions<
    */
   preRenderTile?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap<T>,
-    layer: TileMapLayerOptions<T>,
+    tileMap: TileMap,
+    layer: TileMapLayerOptions,
     chunkPosition: vec,
     tilePosition: vec
   ) => void;
@@ -242,8 +242,8 @@ export type TileMapLayerOptions<
   postRenderTile?: (
     canvas: HTMLCanvasElement,
     context: CanvasRenderingContext2D,
-    tileMap: TileMap<T>,
-    layer: TileMapLayerOptions<T>,
+    tileMap: TileMap,
+    layer: TileMapLayerOptions,
     chunkPosition: vec,
     tilePosition: vec
   ) => void;
@@ -283,6 +283,7 @@ export enum TileAlignment {
 export type TileDefinition = {
   name: string;
   image: TileMapImage;
+  [key: string]: any;
 };
 
 type TileMapImage = HTMLImageElement | HTMLCanvasElement;
@@ -291,10 +292,6 @@ type TileMapChunk = {
   chunkPosition: vec;
   image: HTMLCanvasElement;
 };
-
-function clamp(a: number, min: number = 0, max: number = 1): number {
-  return a < min ? min : (a > max ? max : a);
-}
 
 function pointInRectangle(
   point: vec,
@@ -309,12 +306,7 @@ function pointInRectangle(
   );
 }
 
-export class TileMap<T extends TileDefinition | undefined = undefined> {
-  // TODO
-
-  // https://www.npmjs.com/package/rectangle-decomposition
-  // https://www.npmjs.com/package/fast-rle
-
+export class TileMap {
   private static readonly DEFAULT_OPTIONS: TileMapOptions = {
     clampPositionToBounds: true,
     tileSize: 16,
@@ -341,13 +333,13 @@ export class TileMap<T extends TileDefinition | undefined = undefined> {
   private static readonly DEBUG_TILE_BORDER_COLOUR = 'orange';
   private static readonly DEBUG_TILE_BORDER_LINE_WIDTH = 1;
 
-  private options: TileMapOptions<T> & {
+  private options: TileMapOptions & {
     debug: Required<TileMapDebugOptions>;
   };
 
   private chunkBuffer: LRUMap<string, TileMapChunk>;
 
-  public constructor(options?: Partial<TileMapOptions<T>>) {
+  public constructor(options?: Partial<TileMapOptions>) {
     const actualOptions = Object.assign(
       {},
       TileMap.DEFAULT_OPTIONS,
@@ -369,19 +361,63 @@ export class TileMap<T extends TileDefinition | undefined = undefined> {
   }
 
   /**
-   * Get a minimal set of rectangles which cover the tiles in a given layer
+   * Get a (roughly minimal) set of rectangles which cover the tiles in a
+   * given layer
    *
    * @param layerName The name of the layer to get rectangles for
    * @param fieldName We will check the truthyness of this field in the
    * tile definition
-   * @param tileBounds Optional bounds to check
+   * @param tileBounds Optional bounds to check within, relative to bounds
+   * defined in options if any exist, otherwise relative to (0, 0)
    */
   public getLayerRectangles(
     layerName: string,
-    fieldName?: string,
+    fieldName?: keyof TileDefinition,
     tileBounds?: Bounds
-  ): any {
-    // TODO
+  ): Rectangle[] {
+    const layer = this.options.layers.find((l) => l.name === layerName);
+    if (!layer) {
+      return [];
+    }
+
+    const topLeft = tileBounds?.topLeft ?? vec(0);
+    const bottomRight = tileBounds?.bottomRight ?? vec(
+      Math.max(...layer.data?.map(row => row.length) ?? [0]),
+      layer.data?.length ?? 0
+    );
+    if (bottomRight.x <= topLeft.x || bottomRight.y <= topLeft.y) {
+      return [];
+    }
+
+    const bitmap: boolean[][] = [];
+    for (let y = topLeft.y; y < bottomRight.y; y++) {
+      const row: boolean[] = [];
+
+      for (let x = topLeft.x; x < bottomRight.x; x++) {
+        const tileData = layer.data?.[y]?.[x];
+        if (tileData === undefined || tileData === -1) {
+          row.push(false);
+          continue;
+        }
+
+        const tile = layer.tiles?.[tileData];
+        if (!tile) {
+          row.push(false);
+          continue;
+        }
+
+        if (fieldName && !tile![fieldName]) {
+          row.push(false);
+          continue;
+        }
+
+        row.push(true);
+      }
+
+      bitmap.push(row);
+    }
+
+    return bitmapToRectangles(bitmap);
   }
 
   /**
@@ -395,12 +431,12 @@ export class TileMap<T extends TileDefinition | undefined = undefined> {
   public getTileAtPosition(
     position: vec,
     layerName?: string
-  ): T | null | { [name: string]: T | null } {
+  ): TileDefinition | null | { [name: string]: TileDefinition | null } {
     if (layerName) {
       return this.getTileAtPositionInLayer(position, layerName);
     }
 
-    const result: { [name: string]: T | null } = {};
+    const result: { [name: string]: TileDefinition | null } = {};
     for (const layer of this.options.layers) {
       result[layer.name] = this.getTileAtPositionInLayer(position, layer.name);
     }
@@ -411,7 +447,7 @@ export class TileMap<T extends TileDefinition | undefined = undefined> {
   private getTileAtPositionInLayer(
     position: vec,
     layerName: string
-  ): T | null {
+  ): TileDefinition | null {
     const tilePosition = vec.map(
       vec.mul(position, 1 / this.options.tileSize),
       Math.floor
@@ -967,7 +1003,42 @@ export async function tileMapOptionsContentProcessor(
     type: string;
     content: TileMapOptionsData;
     status: number;
-  }
+  },
+  options?: Partial<{
+    decompressData: boolean;
+  }>
 ): Promise<void> {
-  //
+  const getImageFromContent = (name: string):
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | null => {
+    const image = content[name]?.content;
+    if (!image) {
+      throw new Error(`Image '${name}' not found`);
+    }
+
+    return image;
+  };
+
+  const result: any = data;
+  if (result.layers) {
+    for (const [i, layer] of result.layers.entries()) {
+      // Replace imageName with image in the tile definitions array
+      if (layer.tiles) {
+        for (const [j, tile] of layer.tiles.entries()) {
+          result.layers[i].tiles[j].image = getImageFromContent(tile.imageName);
+          delete result.layers[i].tiles[j].imageName;
+        }
+      }
+
+      // Decompress layer data
+      if (options?.decompressData && layer.data && layer.width) {
+        result.layers[i].data = chunk(decode(layer.data), layer.width);
+        delete result.layers[i].width;
+      }
+    }
+  }
+
+  // @ts-ignore
+  data.content = result as TileMapOptions;
 }
