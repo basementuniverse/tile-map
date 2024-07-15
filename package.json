@@ -1,7 +1,7 @@
 {
   "name": "@basementuniverse/tile-map",
   "version": "1.0.0",
-  "description": "",
+  "description": "Render 2d tile maps with layers, chunk rendering, tilesets, procedural generation, etc.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
