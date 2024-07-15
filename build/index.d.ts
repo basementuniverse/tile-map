@@ -1,0 +1,269 @@
+import { vec } from '@basementuniverse/vec';
+export type TileMapOptionsData = Partial<Omit<TileMapOptions, 'preRender' | 'postRender' | 'preGenerateChunk' | 'postGenerateChunk' | 'debug'>> & {
+    layers?: TileMapLayerOptionsData[];
+};
+export type TileMapLayerOptionsData = Omit<TileMapLayerOptions, 'preRenderTile' | 'postRenderTile'> & {
+    tiles?: Omit<TileDefinition, 'image'> & {
+        imageName: string;
+        [key: string]: any;
+    }[];
+};
+export type TileMapOptions<T extends TileDefinition | undefined = undefined> = {
+    /**
+     * The bounds of the tile map, measured in tiles
+     *
+     * Defines the position of the top-left and bottom-right corners of the
+     * tile grid, used when rendering layer data
+     *
+     * If not defined, layer data will start at (0, 0)
+     */
+    bounds?: Bounds;
+    /**
+     * If true, the camera position will be clamped to the bounds
+     *
+     * Set this to false for infinite tilemaps
+     *
+     * Ignored if no bounds are defined
+     *
+     * Default is false
+     */
+    clampPositionToBounds: boolean;
+    /**
+     * The minimum scale factor
+     */
+    minScale?: number;
+    /**
+     * The maximum scale factor
+     */
+    maxScale?: number;
+    /**
+     * The size of each tile, measured in pixels
+     *
+     * Default is 16
+     */
+    tileSize: number;
+    /**
+     * A list of layers
+     *
+     * Defined in ascending render order; layers[0] will be rendered first, then
+     * layers[1] on top of that, etc.
+     */
+    layers: TileMapLayerOptions<T>[];
+    /**
+     * The size of each render chunk, measured in tiles
+     *
+     * Default is 8
+     */
+    chunkSize: number;
+    /**
+     * Buffer area around the render area where we will load and render chunks,
+     * measured in chunks
+     *
+     * This can be useful if rendering a chunk is quite slow; we can improve
+     * the chances that a chunk will be ready to render by the time it appears
+     * on-screen by increasing this number (although it means more chunks will
+     * be rendered per frame)
+     *
+     * If set to a negative number, only render chunks which are fully inside
+     * the screen bounds
+     *
+     * Default is 1
+     */
+    chunkBorder: number;
+    /**
+     * The maximum size of the LRU cache/queue
+     *
+     * Default is 64
+     */
+    chunkBufferMaxSize: number;
+    /**
+     * Optional hook called before rendering the tilemap
+     *
+     * @param context The context that the tilemap is being rendered into
+     */
+    preRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec, position: vec, scale?: number) => void;
+    /**
+     * Optional hook called after rendering the tilemap
+     *
+     * @param context The context that the tilemap is being rendered into
+     */
+    postRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec, position: vec, scale?: number) => void;
+    /**
+     * Optional hook called before generating a chunk
+     *
+     * Returns either a chunk, or a tuple containing a chunk and a boolean
+     *
+     * If the boolean element of the tuple is false, we skip default generation
+     * even if tilemap data and images/tile definitions are defined
+     *
+     * In this case, the post-generate step will also be skipped
+     *
+     * @param context A context for the chunk's canvas
+     */
+    preGenerateChunk?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk | [TileMapChunk, boolean];
+    /**
+     * Optional hook called after generating a chunk
+     *
+     * @param canvas The chunk's canvas
+     * @param context A context for the chunk's canvas
+     */
+    postGenerateChunk?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk;
+    /**
+     * Optional debug options
+     *
+     * Can be a boolean value (in which case all sub-options will be set to the
+     * same value), or an object allowing specific debug options to be enabled
+     * individually
+     */
+    debug?: Partial<TileMapDebugOptions> | boolean;
+};
+export type TileMapLayerOptions<T extends TileDefinition | undefined = undefined> = {
+    /**
+     * The name of this layer
+     */
+    name: string;
+    /**
+     * A list of tile definitions to use for tiles
+     *
+     * If this is not defined or empty, no tiles will be rendered
+     *
+     * The layer data will reference indexes in this array
+     */
+    tiles?: T[];
+    /**
+     * Layer data, represented as a 2d-array of indexes into the images array
+     *
+     * -1 means there is no tile at this position
+     */
+    data?: number[][];
+    /**
+     * Opacity of this layer, represented as a number between 0 (fully
+     * transparent) and 1 (fully opaque)
+     *
+     * Default is 1
+     */
+    opacity?: number;
+    /**
+     * If true, each tile will be clipped to the tile size
+     *
+     * Default is false
+     */
+    clip?: boolean;
+    /**
+     * How should each tile's image be aligned within the tile?
+     *
+     * Default is TileAlignment.Center
+     */
+    alignment?: TileAlignment;
+    /**
+     * Optional hook called before rendering a tile
+     *
+     * @param context A context for the current chunk's canvas
+     */
+    preRenderTile?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec, tilePosition: vec) => void;
+    /**
+     * Optional hook called after rendering a tile
+     *
+     * If the tile doesn't have any data or a tile definition, the post-render
+     * step will be skipped
+     *
+     * @param canvas The current chunk's canvas
+     * @param context A context for the current chunk's canvas
+     */
+    postRenderTile?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec, tilePosition: vec) => void;
+};
+type TileMapDebugOptions = {
+    showOrigin: boolean;
+    showChunkBorders: boolean;
+    showChunkLabels: boolean;
+    showTileBorders: boolean;
+};
+export type Bounds = {
+    /**
+     * The top-left corner of the tile map, measured in tiles
+     */
+    topLeft: vec;
+    /**
+     * The bottom-right corner of the tile map, measured in tiles
+     */
+    bottomRight: vec;
+};
+export declare enum TileAlignment {
+    TopLeft = 0,
+    Top = 1,
+    TopRight = 2,
+    Left = 3,
+    Center = 4,
+    Right = 5,
+    BottomLeft = 6,
+    Bottom = 7,
+    BottomRight = 8
+}
+export type TileDefinition = {
+    name: string;
+    image: TileMapImage;
+};
+type TileMapImage = HTMLImageElement | HTMLCanvasElement;
+type TileMapChunk = {
+    chunkPosition: vec;
+    image: HTMLCanvasElement;
+};
+export declare class TileMap<T extends TileDefinition | undefined = undefined> {
+    private static readonly DEFAULT_OPTIONS;
+    private static readonly DEBUG_ORIGIN_COLOUR;
+    private static readonly DEBUG_ORIGIN_LINE_WIDTH;
+    private static readonly DEBUG_ORIGIN_SIZE;
+    private static readonly DEBUG_CHUNK_BORDER_COLOUR;
+    private static readonly DEBUG_CHUNK_BORDER_LINE_WIDTH;
+    private static readonly DEBUG_CHUNK_LABEL_COLOUR;
+    private static readonly DEBUG_CHUNK_LABEL_FONT;
+    private static readonly DEBUG_TILE_BORDER_COLOUR;
+    private static readonly DEBUG_TILE_BORDER_LINE_WIDTH;
+    private options;
+    private chunkBuffer;
+    constructor(options?: Partial<TileMapOptions<T>>);
+    /**
+     * Get a minimal set of rectangles which cover the tiles in a given layer
+     *
+     * @param layerName The name of the layer to get rectangles for
+     * @param fieldName We will check the truthyness of this field in the
+     * tile definition
+     * @param tileBounds Optional bounds to check
+     */
+    getLayerRectangles(layerName: string, fieldName?: string, tileBounds?: Bounds): any;
+    /**
+     * Get the tile at a given position and in the specified layer
+     *
+     * If no layer is specified, return a dictionary of layer names to tile
+     * definitions (i.e. return all layers)
+     *
+     * If no tile exists at this position, return null
+     */
+    getTileAtPosition(position: vec, layerName?: string): T | null | {
+        [name: string]: T | null;
+    };
+    private getTileAtPositionInLayer;
+    private hashVector;
+    draw(context: CanvasRenderingContext2D, screen: vec, position: vec, scale: number): void;
+    private generateChunk;
+    private drawLine;
+    private drawCross;
+}
+/**
+ * Content Manager Processor wrapper which converts TileMapOptionsData into
+ * TileMapOptions
+ *
+ * @see https://www.npmjs.com/package/@basementuniverse/content-manager
+ */
+export declare function tileMapOptionsContentProcessor(content: Record<string, {
+    name: string;
+    type: string;
+    content: any;
+    status: number;
+}>, data: {
+    name: string;
+    type: string;
+    content: TileMapOptionsData;
+    status: number;
+}): Promise<void>;
+export {};
