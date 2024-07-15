@@ -4,30 +4,32 @@ import { vec } from '@basementuniverse/vec';
 import { clamp, chunk } from '@basementuniverse/utils';
 import { bitmapToRectangles, Rectangle } from './bitmap-decompose';
 
-export type TileMapOptionsData = Partial<Omit<
-  TileMapOptions,
-  | 'preRender'
-  | 'postRender'
-  | 'preGenerateChunk'
-  | 'postGenerateChunk'
-  | 'debug'
->> & {
-  layers?: TileMapLayerOptionsData[];
+export type TileMapOptionsData<T extends object = any> = Partial<
+  Omit<
+    TileMapOptions,
+    | 'preRender'
+    | 'postRender'
+    | 'preGenerateChunk'
+    | 'postGenerateChunk'
+    | 'debug'
+  >
+> & {
+  layers?: TileMapLayerOptionsData<T>[];
 };
 
-export type TileMapLayerOptionsData = Omit<
+export type TileMapLayerOptionsData<T extends object = any> = Omit<
   TileMapLayerOptions,
   | 'preRenderTile'
   | 'postRenderTile'
 > & {
-  tiles?: (Omit<TileDefinition, 'image'> & {
+  tiles?: (Omit<TileDefinition<T>, 'image'> & {
     imageName: string;
   })[];
   width?: number;
   data: number[];
 };
 
-export type TileMapOptions = {
+export type TileMapOptions<T extends object = any> = {
   /**
    * The bounds of the tile map, measured in tiles
    *
@@ -72,7 +74,7 @@ export type TileMapOptions = {
    * Defined in ascending render order; layers[0] will be rendered first, then
    * layers[1] on top of that, etc.
    */
-  layers: TileMapLayerOptions[];
+  layers: TileMapLayerOptions<T>[];
 
   /**
    * The size of each render chunk, measured in tiles
@@ -111,7 +113,7 @@ export type TileMapOptions = {
    */
   preRender?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap,
+    tileMap: TileMap<T>,
     screen: vec,
     position: vec,
     scale?: number
@@ -124,7 +126,7 @@ export type TileMapOptions = {
    */
   postRender?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap,
+    tileMap: TileMap<T>,
     screen: vec,
     position: vec,
     scale?: number
@@ -144,7 +146,7 @@ export type TileMapOptions = {
    */
   preGenerateChunk?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap,
+    tileMap: TileMap<T>,
     tileBounds: Bounds,
     chunkPosition: vec
   ) => TileMapChunk | [TileMapChunk, boolean];
@@ -158,7 +160,7 @@ export type TileMapOptions = {
   postGenerateChunk?: (
     canvas: HTMLCanvasElement,
     context: CanvasRenderingContext2D,
-    tileMap: TileMap,
+    tileMap: TileMap<T>,
     tileBounds: Bounds,
     chunkPosition: vec
   ) => TileMapChunk;
@@ -173,7 +175,7 @@ export type TileMapOptions = {
   debug?: Partial<TileMapDebugOptions> | boolean;
 };
 
-export type TileMapLayerOptions = {
+export type TileMapLayerOptions<T extends object = any> = {
   /**
    * The name of this layer
    */
@@ -186,7 +188,7 @@ export type TileMapLayerOptions = {
    *
    * The layer data will reference indexes in this array
    */
-  tiles?: TileDefinition[];
+  tiles?: TileDefinition<T>[];
 
   /**
    * Layer data, represented as a 2d-array of indexes into the images array
@@ -224,8 +226,8 @@ export type TileMapLayerOptions = {
    */
   preRenderTile?: (
     context: CanvasRenderingContext2D,
-    tileMap: TileMap,
-    layer: TileMapLayerOptions,
+    tileMap: TileMap<T>,
+    layer: TileMapLayerOptions<T>,
     chunkPosition: vec,
     tilePosition: vec
   ) => void;
@@ -242,8 +244,8 @@ export type TileMapLayerOptions = {
   postRenderTile?: (
     canvas: HTMLCanvasElement,
     context: CanvasRenderingContext2D,
-    tileMap: TileMap,
-    layer: TileMapLayerOptions,
+    tileMap: TileMap<T>,
+    layer: TileMapLayerOptions<T>,
     chunkPosition: vec,
     tilePosition: vec
   ) => void;
@@ -280,11 +282,11 @@ export enum TileAlignment {
   BottomRight,
 }
 
-export type TileDefinition = {
+export type TileDefinition<T extends object = any> = {
   name: string;
   image: TileMapImage;
   [key: string]: any;
-};
+} & T;
 
 type TileMapImage = HTMLImageElement | HTMLCanvasElement;
 
@@ -306,7 +308,7 @@ function pointInRectangle(
   );
 }
 
-export class TileMap {
+export class TileMap<T extends object = any> {
   private static readonly DEFAULT_OPTIONS: TileMapOptions = {
     clampPositionToBounds: true,
     tileSize: 16,
@@ -333,13 +335,13 @@ export class TileMap {
   private static readonly DEBUG_TILE_BORDER_COLOUR = 'orange';
   private static readonly DEBUG_TILE_BORDER_LINE_WIDTH = 1;
 
-  private options: TileMapOptions & {
+  private options: TileMapOptions<T> & {
     debug: Required<TileMapDebugOptions>;
   };
 
   private chunkBuffer: LRUMap<string, TileMapChunk>;
 
-  public constructor(options?: Partial<TileMapOptions>) {
+  public constructor(options?: Partial<TileMapOptions<T>>) {
     const actualOptions = Object.assign(
       {},
       TileMap.DEFAULT_OPTIONS,
@@ -372,7 +374,7 @@ export class TileMap {
    */
   public getLayerRectangles(
     layerName: string,
-    fieldName?: keyof TileDefinition,
+    fieldName?: keyof TileDefinition<T>,
     tileBounds?: Bounds
   ): Rectangle[] {
     const layer = this.options.layers.find((l) => l.name === layerName);
@@ -431,12 +433,12 @@ export class TileMap {
   public getTileAtPosition(
     position: vec,
     layerName?: string
-  ): TileDefinition | null | { [name: string]: TileDefinition | null } {
+  ): TileDefinition<T> | null | { [name: string]: TileDefinition<T> | null } {
     if (layerName) {
       return this.getTileAtPositionInLayer(position, layerName);
     }
 
-    const result: { [name: string]: TileDefinition | null } = {};
+    const result: { [name: string]: TileDefinition<T> | null } = {};
     for (const layer of this.options.layers) {
       result[layer.name] = this.getTileAtPositionInLayer(position, layer.name);
     }
@@ -447,7 +449,7 @@ export class TileMap {
   private getTileAtPositionInLayer(
     position: vec,
     layerName: string
-  ): TileDefinition | null {
+  ): TileDefinition<T> | null {
     const tilePosition = vec.map(
       vec.mul(position, 1 / this.options.tileSize),
       Math.floor
@@ -991,7 +993,7 @@ export class TileMap {
  *
  * @see https://www.npmjs.com/package/@basementuniverse/content-manager
  */
-export async function tileMapOptionsContentProcessor(
+export async function tileMapOptionsContentProcessor<T extends object = any>(
   content: Record<string, {
     name: string;
     type: string;
@@ -1001,7 +1003,7 @@ export async function tileMapOptionsContentProcessor(
   data: {
     name: string;
     type: string;
-    content: TileMapOptionsData;
+    content: TileMapOptionsData<T>;
     status: number;
   },
   options?: Partial<{
@@ -1040,5 +1042,5 @@ export async function tileMapOptionsContentProcessor(
   }
 
   // @ts-ignore
-  data.content = result as TileMapOptions;
+  data.content = result as TileMapOptions<T>;
 }
