@@ -1022,7 +1022,7 @@ export async function tileMapOptionsContentProcessor<T extends object = any>(
     return image;
   };
 
-  const result: any = data;
+  const result: any = data.content;
   if (result.layers) {
     for (const [i, layer] of result.layers.entries()) {
       // Replace imageName with image in the tile definitions array
