@@ -1003,7 +1003,7 @@ export async function tileMapOptionsContentProcessor<T extends object = any>(
   data: {
     name: string;
     type: string;
-    content: TileMapOptionsData<T>;
+    content: any;
     status: number;
   },
   options?: Partial<{

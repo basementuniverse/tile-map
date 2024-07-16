@@ -268,7 +268,7 @@ export declare function tileMapOptionsContentProcessor<T extends object = any>(c
 }>, data: {
     name: string;
     type: string;
-    content: TileMapOptionsData<T>;
+    content: any;
     status: number;
 }, options?: Partial<{
     decompressData: boolean;
