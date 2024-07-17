@@ -191,15 +191,15 @@ export type Bounds = {
     bottomRight: vec;
 };
 export declare enum TileAlignment {
-    TopLeft = 0,
-    Top = 1,
-    TopRight = 2,
-    Left = 3,
-    Center = 4,
-    Right = 5,
-    BottomLeft = 6,
-    Bottom = 7,
-    BottomRight = 8
+    TopLeft = "top-left",
+    Top = "top",
+    TopRight = "top-right",
+    Left = "left",
+    Center = "center",
+    Right = "right",
+    BottomLeft = "bottom-left",
+    Bottom = "bottom",
+    BottomRight = "bottom-right"
 }
 export type TileDefinition<T extends object = any> = {
     name: string;
@@ -213,6 +213,7 @@ type TileMapChunk = {
 };
 export declare class TileMap<T extends object = any> {
     private static readonly DEFAULT_OPTIONS;
+    private static readonly DEFAULT_LAYER_OPTIONS;
     private static readonly DEBUG_ORIGIN_COLOUR;
     private static readonly DEBUG_ORIGIN_LINE_WIDTH;
     private static readonly DEBUG_ORIGIN_SIZE;

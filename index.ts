@@ -271,15 +271,15 @@ export type Bounds = {
 };
 
 export enum TileAlignment {
-  TopLeft = 0,
-  Top,
-  TopRight,
-  Left,
-  Center,
-  Right,
-  BottomLeft,
-  Bottom,
-  BottomRight,
+  TopLeft = 'top-left',
+  Top = 'top',
+  TopRight = 'top-right',
+  Left = 'left',
+  Center = 'center',
+  Right = 'right',
+  BottomLeft = 'bottom-left',
+  Bottom = 'bottom',
+  BottomRight = 'bottom-right',
 }
 
 export type TileDefinition<T extends object = any> = {
@@ -322,6 +322,10 @@ export class TileMap<T extends object = any> {
     chunkBufferMaxSize: 64,
   };
 
+  private static readonly DEFAULT_LAYER_OPTIONS: TileMapLayerOptions = {
+    name: 'default',
+  };
+
   private static readonly DEBUG_ORIGIN_COLOUR = 'cyan';
   private static readonly DEBUG_ORIGIN_LINE_WIDTH = 2;
   private static readonly DEBUG_ORIGIN_SIZE = 10;
@@ -347,6 +351,14 @@ export class TileMap<T extends object = any> {
       TileMap.DEFAULT_OPTIONS,
       options ?? {}
     );
+
+    for (const [i, layer] of actualOptions.layers.entries()) {
+      actualOptions.layers[i] = Object.assign(
+        {},
+        TileMap.DEFAULT_LAYER_OPTIONS,
+        layer
+      );
+    }
 
     if (!actualOptions.debug || actualOptions.debug === true) {
       actualOptions.debug = {
