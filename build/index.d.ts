@@ -211,6 +211,28 @@ type TileMapChunk = {
     chunkPosition: vec;
     image: HTMLCanvasElement;
 };
+/**
+ * Simplified interface for the camera component
+ *
+ * We can optionally pass this to the draw method instead of explicitly
+ * passing the screen size, camera position and camera scale
+ *
+ * @see https://www.npmjs.com/package/@basementuniverse/camera
+ */
+interface Camera {
+    position: vec;
+    readonly actualPosition: vec;
+    scale: number;
+    readonly actualScale: number;
+    bounds: {
+        top: number;
+        bottom: number;
+        left: number;
+        right: number;
+    };
+}
+export declare function cameraBoundsToTileMapBounds(bounds: Camera['bounds']): Bounds;
+export declare function cameraBoundsSize(bounds: Camera['bounds']): vec;
 export declare class TileMap<T extends object = any> {
     private static readonly DEFAULT_OPTIONS;
     private static readonly DEFAULT_LAYER_OPTIONS;
@@ -250,7 +272,9 @@ export declare class TileMap<T extends object = any> {
     };
     private getTileAtPositionInLayer;
     private hashVector;
+    draw(context: CanvasRenderingContext2D, camera: Camera): void;
     draw(context: CanvasRenderingContext2D, screen: vec, position: vec, scale: number): void;
+    private performDraw;
     private generateChunk;
     private drawLine;
     private drawCross;

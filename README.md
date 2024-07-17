@@ -91,6 +91,14 @@ type Rectangle = {
 };
 ```
 
+If you're using [this](https://www.npmjs.com/package/@basementuniverse/camera) camera component (or one with the same public interface), you can pass this to the `draw` method instead:
+
+```ts
+tileMap.draw(context, camera);
+```
+
+_Note: this will skip doing translate/scale transforms, assuming that the camera has already done them. It will also get the viewport/screen size from the camera. So, make sure to call `camera.draw()` before calling `tileMap.draw()`._
+
 ## Options
 
 ```ts

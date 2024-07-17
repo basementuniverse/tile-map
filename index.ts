@@ -295,6 +295,29 @@ type TileMapChunk = {
   image: HTMLCanvasElement;
 };
 
+/**
+ * Simplified interface for the camera component
+ *
+ * We can optionally pass this to the draw method instead of explicitly
+ * passing the screen size, camera position and camera scale
+ *
+ * @see https://www.npmjs.com/package/@basementuniverse/camera
+ */
+interface Camera {
+  position: vec;
+  readonly actualPosition: vec;
+
+  scale: number;
+  readonly actualScale: number;
+
+  bounds: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  };
+}
+
 function pointInRectangle(
   point: vec,
   topLeft: vec,
@@ -306,6 +329,18 @@ function pointInRectangle(
     point.x < bottomRight.x &&
     point.y < bottomRight.y
   );
+}
+
+export function cameraBoundsToTileMapBounds(bounds: Camera['bounds']): Bounds {
+  return {
+    topLeft: vec(bounds.left, bounds.top),
+    bottomRight: vec(bounds.right, bounds.bottom),
+  };
+}
+
+export function cameraBoundsSize(bounds: Camera['bounds']): vec {
+  const convertedBounds = cameraBoundsToTileMapBounds(bounds);
+  return vec.sub(convertedBounds.bottomRight, convertedBounds.topLeft);
 }
 
 export class TileMap<T extends object = any> {
@@ -490,9 +525,40 @@ export class TileMap<T extends object = any> {
 
   public draw(
     context: CanvasRenderingContext2D,
+    camera: Camera
+  ): void;
+  public draw(
+    context: CanvasRenderingContext2D,
     screen: vec,
     position: vec,
     scale: number
+  ): void;
+  public draw(
+    context: CanvasRenderingContext2D,
+    a: any,
+    b?: any,
+    c?: any
+  ) {
+    if (b && c) {
+      this.performDraw(context, a as vec, b as vec, c as number);
+    } else {
+      const screen = cameraBoundsSize((a as Camera).bounds);
+      this.performDraw(
+        context,
+        screen,
+        (a as Camera).actualPosition,
+        (a as Camera).actualScale,
+        false
+      );
+    }
+  }
+
+  private performDraw(
+    context: CanvasRenderingContext2D,
+    screen: vec,
+    position: vec,
+    scale: number,
+    doTransforms: boolean = true
   ) {
     const absoluteChunkSize = this.options.tileSize * this.options.chunkSize;
     const chunkBorder = vec(this.options.chunkBorder);
@@ -562,11 +628,14 @@ export class TileMap<T extends object = any> {
     );
 
     context.save();
-    context.scale(actualScale, actualScale);
-    context.translate(
-      -actualPosition.x + screen.x / (actualScale * 2),
-      -actualPosition.y + screen.y / (actualScale * 2)
-    );
+
+    if (doTransforms) {
+      context.scale(actualScale, actualScale);
+      context.translate(
+        -actualPosition.x + screen.x / (actualScale * 2),
+        -actualPosition.y + screen.y / (actualScale * 2)
+      );
+    }
 
     this.options.preRender?.(
       context,
