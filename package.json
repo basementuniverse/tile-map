@@ -1,6 +1,6 @@
 {
   "name": "@basementuniverse/tile-map",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Render 2d tile maps with layers, chunk rendering, tilesets, procedural generation, etc.",
   "author": "Gordon Larrigan <gordonlarrigan@gmail.com> (https://gordonlarrigan.com)",
   "license": "MIT",
