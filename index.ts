@@ -1,7 +1,7 @@
-import { LRUMap } from 'lru_map';
+import { chunk, clamp } from '@basementuniverse/utils';
+import { vec2 } from '@basementuniverse/vec';
 import decode from 'fast-rle/decode';
-import { vec } from '@basementuniverse/vec';
-import { clamp, chunk } from '@basementuniverse/utils';
+import { LRUMap } from 'lru_map';
 import { bitmapToRectangles, Rectangle } from './bitmap-decompose';
 
 export type TileMapOptionsData<T extends object = any> = Partial<
@@ -19,8 +19,7 @@ export type TileMapOptionsData<T extends object = any> = Partial<
 
 export type TileMapLayerOptionsData<T extends object = any> = Omit<
   TileMapLayerOptions,
-  | 'preRenderTile'
-  | 'postRenderTile'
+  'preRenderTile' | 'postRenderTile'
 > & {
   tiles?: (Omit<TileDefinition<T>, 'image'> & {
     imageName: string;
@@ -114,8 +113,8 @@ export type TileMapOptions<T extends object = any> = {
   preRender?: (
     context: CanvasRenderingContext2D,
     tileMap: TileMap<T>,
-    screen: vec,
-    position: vec,
+    screen: vec2,
+    position: vec2,
     scale?: number
   ) => void;
 
@@ -127,8 +126,8 @@ export type TileMapOptions<T extends object = any> = {
   postRender?: (
     context: CanvasRenderingContext2D,
     tileMap: TileMap<T>,
-    screen: vec,
-    position: vec,
+    screen: vec2,
+    position: vec2,
     scale?: number
   ) => void;
 
@@ -148,7 +147,7 @@ export type TileMapOptions<T extends object = any> = {
     context: CanvasRenderingContext2D,
     tileMap: TileMap<T>,
     tileBounds: Bounds,
-    chunkPosition: vec
+    chunkPosition: vec2
   ) => TileMapChunk | [TileMapChunk, boolean];
 
   /**
@@ -162,7 +161,7 @@ export type TileMapOptions<T extends object = any> = {
     context: CanvasRenderingContext2D,
     tileMap: TileMap<T>,
     tileBounds: Bounds,
-    chunkPosition: vec
+    chunkPosition: vec2
   ) => TileMapChunk;
 
   /**
@@ -228,8 +227,8 @@ export type TileMapLayerOptions<T extends object = any> = {
     context: CanvasRenderingContext2D,
     tileMap: TileMap<T>,
     layer: TileMapLayerOptions<T>,
-    chunkPosition: vec,
-    tilePosition: vec
+    chunkPosition: vec2,
+    tilePosition: vec2
   ) => void;
 
   /**
@@ -246,8 +245,8 @@ export type TileMapLayerOptions<T extends object = any> = {
     context: CanvasRenderingContext2D,
     tileMap: TileMap<T>,
     layer: TileMapLayerOptions<T>,
-    chunkPosition: vec,
-    tilePosition: vec
+    chunkPosition: vec2,
+    tilePosition: vec2
   ) => void;
 };
 
@@ -262,12 +261,12 @@ export type Bounds = {
   /**
    * The top-left corner of the tile map, measured in tiles
    */
-  topLeft: vec;
+  topLeft: vec2;
 
   /**
    * The bottom-right corner of the tile map, measured in tiles
    */
-  bottomRight: vec;
+  bottomRight: vec2;
 };
 
 export enum TileAlignment {
@@ -291,7 +290,7 @@ export type TileDefinition<T extends object = any> = {
 type TileMapImage = HTMLImageElement | HTMLCanvasElement;
 
 type TileMapChunk = {
-  chunkPosition: vec;
+  chunkPosition: vec2;
   image: HTMLCanvasElement;
 };
 
@@ -304,8 +303,8 @@ type TileMapChunk = {
  * @see https://www.npmjs.com/package/@basementuniverse/camera
  */
 interface Camera {
-  position: vec;
-  readonly actualPosition: vec;
+  position: vec2;
+  readonly actualPosition: vec2;
 
   scale: number;
   readonly actualScale: number;
@@ -319,9 +318,9 @@ interface Camera {
 }
 
 function pointInRectangle(
-  point: vec,
-  topLeft: vec,
-  bottomRight: vec
+  point: vec2,
+  topLeft: vec2,
+  bottomRight: vec2
 ): boolean {
   return (
     point.x >= topLeft.x &&
@@ -333,14 +332,14 @@ function pointInRectangle(
 
 export function cameraBoundsToTileMapBounds(bounds: Camera['bounds']): Bounds {
   return {
-    topLeft: vec(bounds.left, bounds.top),
-    bottomRight: vec(bounds.right, bounds.bottom),
+    topLeft: vec2(bounds.left, bounds.top),
+    bottomRight: vec2(bounds.right, bounds.bottom),
   };
 }
 
-export function cameraBoundsSize(bounds: Camera['bounds']): vec {
+export function cameraBoundsSize(bounds: Camera['bounds']): vec2 {
   const convertedBounds = cameraBoundsToTileMapBounds(bounds);
-  return vec.sub(convertedBounds.bottomRight, convertedBounds.topLeft);
+  return vec2.sub(convertedBounds.bottomRight, convertedBounds.topLeft);
 }
 
 export class TileMap<T extends object = any> {
@@ -424,16 +423,18 @@ export class TileMap<T extends object = any> {
     fieldName?: keyof TileDefinition<T>,
     tileBounds?: Bounds
   ): Rectangle[] {
-    const layer = this.options.layers.find((l) => l.name === layerName);
+    const layer = this.options.layers.find(l => l.name === layerName);
     if (!layer) {
       return [];
     }
 
-    const topLeft = tileBounds?.topLeft ?? vec(0);
-    const bottomRight = tileBounds?.bottomRight ?? vec(
-      Math.max(...layer.data?.map(row => row.length) ?? [0]),
-      layer.data?.length ?? 0
-    );
+    const topLeft = tileBounds?.topLeft ?? vec2(0);
+    const bottomRight =
+      tileBounds?.bottomRight ??
+      vec2(
+        Math.max(...(layer.data?.map(row => row.length) ?? [0])),
+        layer.data?.length ?? 0
+      );
     if (bottomRight.x <= topLeft.x || bottomRight.y <= topLeft.y) {
       return [];
     }
@@ -478,7 +479,7 @@ export class TileMap<T extends object = any> {
    * If no tile exists at this position, return null
    */
   public getTileAtPosition(
-    position: vec,
+    position: vec2,
     layerName?: string
   ): TileDefinition<T> | null | { [name: string]: TileDefinition<T> | null } {
     if (layerName) {
@@ -494,15 +495,15 @@ export class TileMap<T extends object = any> {
   }
 
   private getTileAtPositionInLayer(
-    position: vec,
+    position: vec2,
     layerName: string
   ): TileDefinition<T> | null {
-    const tilePosition = vec.map(
-      vec.mul(position, 1 / this.options.tileSize),
+    const tilePosition = vec2.map(
+      vec2.mul(position, 1 / this.options.tileSize),
       Math.floor
     );
 
-    const layer = this.options.layers.find((l) => l.name === layerName);
+    const layer = this.options.layers.find(l => l.name === layerName);
     if (!layer) {
       return null;
     }
@@ -519,28 +520,20 @@ export class TileMap<T extends object = any> {
     return null;
   }
 
-  private hashVector(v: vec): string {
-    return vec.str(v);
+  private hashVector(v: vec2): string {
+    return vec2.str(v);
   }
 
+  public draw(context: CanvasRenderingContext2D, camera: Camera): void;
   public draw(
     context: CanvasRenderingContext2D,
-    camera: Camera
-  ): void;
-  public draw(
-    context: CanvasRenderingContext2D,
-    screen: vec,
-    position: vec,
+    screen: vec2,
+    position: vec2,
     scale: number
   ): void;
-  public draw(
-    context: CanvasRenderingContext2D,
-    a: any,
-    b?: any,
-    c?: any
-  ) {
+  public draw(context: CanvasRenderingContext2D, a: any, b?: any, c?: any) {
     if (b && c) {
-      this.performDraw(context, a as vec, b as vec, c as number);
+      this.performDraw(context, a as vec2, b as vec2, c as number);
     } else {
       const screen = cameraBoundsSize((a as Camera).bounds);
       this.performDraw(
@@ -555,13 +548,13 @@ export class TileMap<T extends object = any> {
 
   private performDraw(
     context: CanvasRenderingContext2D,
-    screen: vec,
-    position: vec,
+    screen: vec2,
+    position: vec2,
     scale: number,
     doTransforms: boolean = true
   ) {
     const absoluteChunkSize = this.options.tileSize * this.options.chunkSize;
-    const chunkBorder = vec(this.options.chunkBorder);
+    const chunkBorder = vec2(this.options.chunkBorder);
 
     // Maybe clamp scale
     let actualScale = scale;
@@ -573,56 +566,47 @@ export class TileMap<T extends object = any> {
     }
 
     // Maybe clamp position to bounds
-    let actualPosition = vec(position);
+    let actualPosition = vec2(position);
     if (this.options.bounds && this.options.clampPositionToBounds) {
       const tileSizeScaled = this.options.tileSize / actualScale;
-      const halfScreenScaled = vec.map(
-        vec.mul(screen, 1 / (actualScale * 2)),
+      const halfScreenScaled = vec2.map(
+        vec2.mul(screen, 1 / (actualScale * 2)),
         Math.ceil
       );
-      const minPosition = vec(
+      const minPosition = vec2(
         this.options.bounds.topLeft.x * tileSizeScaled + halfScreenScaled.x,
         this.options.bounds.topLeft.y * tileSizeScaled + halfScreenScaled.y
       );
-      const maxPosition = vec(
+      const maxPosition = vec2(
         this.options.bounds.bottomRight.x * tileSizeScaled - halfScreenScaled.x,
         this.options.bounds.bottomRight.y * tileSizeScaled - halfScreenScaled.y
       );
 
-      actualPosition = vec(
+      actualPosition = vec2(
         clamp(actualPosition.x, minPosition.x, maxPosition.x),
         clamp(actualPosition.y, minPosition.y, maxPosition.y)
       );
     }
 
-    const screenSizeInChunks = vec.map(
-      vec.mul(
-        screen,
-        1 / (absoluteChunkSize * actualScale)
-      ),
+    const screenSizeInChunks = vec2.map(
+      vec2.mul(screen, 1 / (absoluteChunkSize * actualScale)),
       Math.ceil
     );
-    const screenCenterChunk = vec.map(
-      vec.mul(actualPosition, 1 / absoluteChunkSize),
+    const screenCenterChunk = vec2.map(
+      vec2.mul(actualPosition, 1 / absoluteChunkSize),
       Math.floor
     );
-    const topLeftChunk = vec.sub(
-      vec.sub(
+    const topLeftChunk = vec2.sub(
+      vec2.sub(
         screenCenterChunk,
-        vec.map(
-          vec.mul(screenSizeInChunks, 0.5),
-          Math.ceil
-        )
+        vec2.map(vec2.mul(screenSizeInChunks, 0.5), Math.ceil)
       ),
       chunkBorder
     );
-    const bottomRightChunk = vec.add(
-      vec.add(
+    const bottomRightChunk = vec2.add(
+      vec2.add(
         screenCenterChunk,
-        vec.map(
-          vec.mul(screenSizeInChunks, 0.5),
-          Math.ceil
-        )
+        vec2.map(vec2.mul(screenSizeInChunks, 0.5), Math.ceil)
       ),
       chunkBorder
     );
@@ -648,16 +632,19 @@ export class TileMap<T extends object = any> {
     // Render chunks
     for (let y = topLeftChunk.y; y < bottomRightChunk.y; y++) {
       for (let x = topLeftChunk.x; x < bottomRightChunk.x; x++) {
-        const chunkPosition = vec(x, y);
-        const chunkAbsolutePosition = vec.mul(chunkPosition, absoluteChunkSize);
+        const chunkPosition = vec2(x, y);
+        const chunkAbsolutePosition = vec2.mul(
+          chunkPosition,
+          absoluteChunkSize
+        );
 
         // Check if we have this chunk in the cache
         const chunkHash = this.hashVector(chunkPosition);
         if (!this.chunkBuffer.has(chunkHash)) {
-          this.chunkBuffer.set(chunkHash, this.generateChunk(
-            chunkPosition,
-            absoluteChunkSize
-          ));
+          this.chunkBuffer.set(
+            chunkHash,
+            this.generateChunk(chunkPosition, absoluteChunkSize)
+          );
         }
 
         const chunk = this.chunkBuffer.get(chunkHash);
@@ -681,28 +668,22 @@ export class TileMap<T extends object = any> {
 
     // Render debug helpers
     if (this.options.debug.showTileBorders) {
-      const topLeftTile = vec.mul(
-        vec.sub(
+      const topLeftTile = vec2.mul(
+        vec2.sub(
           screenCenterChunk,
-          vec.add(
-            vec.map(
-              vec.mul(screenSizeInChunks, 0.5),
-              Math.ceil
-            ),
-            vec(1)
+          vec2.add(
+            vec2.map(vec2.mul(screenSizeInChunks, 0.5), Math.ceil),
+            vec2(1)
           )
         ),
         this.options.chunkSize
       );
-      const bottomRightTile = vec.mul(
-        vec.add(
+      const bottomRightTile = vec2.mul(
+        vec2.add(
           screenCenterChunk,
-          vec.add(
-            vec.map(
-              vec.mul(screenSizeInChunks, 0.5),
-              Math.ceil
-            ),
-            vec(1)
+          vec2.add(
+            vec2.map(vec2.mul(screenSizeInChunks, 0.5), Math.ceil),
+            vec2(1)
           )
         ),
         this.options.chunkSize
@@ -711,11 +692,11 @@ export class TileMap<T extends object = any> {
       for (let y = topLeftTile.y; y < bottomRightTile.y; y++) {
         this.drawLine(
           context,
-          vec(
+          vec2(
             actualPosition.x - screen.x / (actualScale * 2),
             y * this.options.tileSize
           ),
-          vec(
+          vec2(
             actualPosition.x + screen.x / (actualScale * 2),
             y * this.options.tileSize
           ),
@@ -726,11 +707,11 @@ export class TileMap<T extends object = any> {
       for (let x = topLeftTile.x; x < bottomRightTile.x; x++) {
         this.drawLine(
           context,
-          vec(
+          vec2(
             x * this.options.tileSize,
             actualPosition.y - screen.y / (actualScale * 2)
           ),
-          vec(
+          vec2(
             x * this.options.tileSize,
             actualPosition.y + screen.y / (actualScale * 2)
           ),
@@ -744,11 +725,11 @@ export class TileMap<T extends object = any> {
       for (let y = topLeftChunk.y; y < bottomRightChunk.y; y++) {
         this.drawLine(
           context,
-          vec(
+          vec2(
             actualPosition.x - screen.x / (actualScale * 2),
             y * absoluteChunkSize
           ),
-          vec(
+          vec2(
             actualPosition.x + screen.x / (actualScale * 2),
             y * absoluteChunkSize
           ),
@@ -759,11 +740,11 @@ export class TileMap<T extends object = any> {
       for (let x = topLeftChunk.x; x < bottomRightChunk.x; x++) {
         this.drawLine(
           context,
-          vec(
+          vec2(
             x * absoluteChunkSize,
             actualPosition.y - screen.y / (actualScale * 2)
           ),
-          vec(
+          vec2(
             x * absoluteChunkSize,
             actualPosition.y + screen.y / (actualScale * 2)
           ),
@@ -795,11 +776,11 @@ export class TileMap<T extends object = any> {
 
     if (
       this.options.debug.showOrigin &&
-      pointInRectangle(vec(0, 0), topLeftChunk, bottomRightChunk)
+      pointInRectangle(vec2(0, 0), topLeftChunk, bottomRightChunk)
     ) {
       this.drawCross(
         context,
-        vec(0, 0),
+        vec2(0, 0),
         TileMap.DEBUG_ORIGIN_COLOUR,
         TileMap.DEBUG_ORIGIN_LINE_WIDTH,
         TileMap.DEBUG_ORIGIN_SIZE
@@ -810,7 +791,7 @@ export class TileMap<T extends object = any> {
   }
 
   private generateChunk(
-    chunkPosition: vec,
+    chunkPosition: vec2,
     absoluteChunkSize: number
   ): TileMapChunk {
     const chunkCanvas = document.createElement('canvas');
@@ -824,12 +805,12 @@ export class TileMap<T extends object = any> {
       image: chunkCanvas,
     };
 
-    const topLeftTile = vec.mul(chunkPosition, this.options.chunkSize);
-    const bottomRightTile = vec.add(
+    const topLeftTile = vec2.mul(chunkPosition, this.options.chunkSize);
+    const bottomRightTile = vec2.add(
       topLeftTile,
-      vec(this.options.chunkSize - 1)
+      vec2(this.options.chunkSize - 1)
     );
-    const boundsTopLeft = this.options.bounds?.topLeft ?? vec(0);
+    const boundsTopLeft = this.options.bounds?.topLeft ?? vec2(0);
 
     if (this.options.preGenerateChunk) {
       const result = this.options.preGenerateChunk(
@@ -858,7 +839,7 @@ export class TileMap<T extends object = any> {
 
       for (let y = topLeftTile.y; y <= bottomRightTile.y; y++) {
         for (let x = topLeftTile.x; x <= bottomRightTile.x; x++) {
-          const tilePosition = vec(x, y);
+          const tilePosition = vec2(x, y);
 
           layer.preRenderTile?.(
             chunkContext,
@@ -868,18 +849,14 @@ export class TileMap<T extends object = any> {
             tilePosition
           );
 
-          const tileDataPosition = vec.sub(
-            tilePosition,
-            boundsTopLeft
-          );
+          const tileDataPosition = vec2.sub(tilePosition, boundsTopLeft);
 
           if (tileDataPosition.x < 0 || tileDataPosition.y < 0) {
             continue;
           }
 
-          const tileData = layer.data
-            ?.[tileDataPosition.y]
-            ?.[tileDataPosition.x];
+          const tileData =
+            layer.data?.[tileDataPosition.y]?.[tileDataPosition.x];
           if (tileData === undefined || tileData === -1) {
             continue;
           }
@@ -889,12 +866,9 @@ export class TileMap<T extends object = any> {
             continue;
           }
 
-          const tileAbsolutePosition = vec.sub(
-            vec.mul(
-              tilePosition,
-              this.options.tileSize
-            ),
-            vec.mul(chunkPosition, absoluteChunkSize)
+          const tileAbsolutePosition = vec2.sub(
+            vec2.mul(tilePosition, this.options.tileSize),
+            vec2.mul(chunkPosition, absoluteChunkSize)
           );
 
           // Tile clipping
@@ -911,77 +885,89 @@ export class TileMap<T extends object = any> {
           }
 
           // Tile alignment
-          let tileImageAbsolutePosition: vec;
+          let tileImageAbsolutePosition: vec2;
           switch (alignment) {
             case TileAlignment.TopLeft:
-              tileImageAbsolutePosition = vec(tileAbsolutePosition);
+              tileImageAbsolutePosition = vec2(tileAbsolutePosition);
               break;
 
             case TileAlignment.Top:
-              tileImageAbsolutePosition = vec(
-                (
-                  tileAbsolutePosition.x + this.options.tileSize / 2
-                ) - tileImage.width / 2,
+              tileImageAbsolutePosition = vec2(
+                tileAbsolutePosition.x +
+                  this.options.tileSize / 2 -
+                  tileImage.width / 2,
                 tileAbsolutePosition.y
               );
               break;
 
             case TileAlignment.TopRight:
-              tileImageAbsolutePosition = vec(
-                tileAbsolutePosition.x + this.options.tileSize - tileImage.width,
+              tileImageAbsolutePosition = vec2(
+                tileAbsolutePosition.x +
+                  this.options.tileSize -
+                  tileImage.width,
                 tileAbsolutePosition.y
               );
               break;
 
             case TileAlignment.Left:
-              tileImageAbsolutePosition = vec(
+              tileImageAbsolutePosition = vec2(
                 tileAbsolutePosition.x,
-                (
-                  tileAbsolutePosition.y + this.options.tileSize / 2
-                ) - tileImage.height / 2
+                tileAbsolutePosition.y +
+                  this.options.tileSize / 2 -
+                  tileImage.height / 2
               );
               break;
 
             case TileAlignment.Center:
-              tileImageAbsolutePosition = vec(
-                (
-                  tileAbsolutePosition.x + this.options.tileSize / 2
-                ) - tileImage.width / 2,
-                (
-                  tileAbsolutePosition.y + this.options.tileSize / 2
-                ) - tileImage.height / 2
+              tileImageAbsolutePosition = vec2(
+                tileAbsolutePosition.x +
+                  this.options.tileSize / 2 -
+                  tileImage.width / 2,
+                tileAbsolutePosition.y +
+                  this.options.tileSize / 2 -
+                  tileImage.height / 2
               );
               break;
 
             case TileAlignment.Right:
-              tileImageAbsolutePosition = vec(
-                tileAbsolutePosition.x + this.options.tileSize - tileImage.width,
-                (
-                  tileAbsolutePosition.y + this.options.tileSize / 2
-                ) - tileImage.height / 2
+              tileImageAbsolutePosition = vec2(
+                tileAbsolutePosition.x +
+                  this.options.tileSize -
+                  tileImage.width,
+                tileAbsolutePosition.y +
+                  this.options.tileSize / 2 -
+                  tileImage.height / 2
               );
               break;
 
             case TileAlignment.BottomLeft:
-              tileImageAbsolutePosition = vec(
+              tileImageAbsolutePosition = vec2(
                 tileAbsolutePosition.x,
-                tileAbsolutePosition.y + this.options.tileSize - tileImage.height
+                tileAbsolutePosition.y +
+                  this.options.tileSize -
+                  tileImage.height
               );
               break;
 
             case TileAlignment.Bottom:
-              tileImageAbsolutePosition = vec(
-                (
-                  tileAbsolutePosition.x + this.options.tileSize / 2
-                ) - tileImage.width / 2,
-                tileAbsolutePosition.y + this.options.tileSize - tileImage.height
+              tileImageAbsolutePosition = vec2(
+                tileAbsolutePosition.x +
+                  this.options.tileSize / 2 -
+                  tileImage.width / 2,
+                tileAbsolutePosition.y +
+                  this.options.tileSize -
+                  tileImage.height
               );
               break;
 
             case TileAlignment.BottomRight:
-              tileImageAbsolutePosition = vec(
-                tileAbsolutePosition.x + this.options.tileSize - tileImage.width,
-                tileAbsolutePosition.y + this.options.tileSize - tileImage.height
+              tileImageAbsolutePosition = vec2(
+                tileAbsolutePosition.x +
+                  this.options.tileSize -
+                  tileImage.width,
+                tileAbsolutePosition.y +
+                  this.options.tileSize -
+                  tileImage.height
               );
               break;
           }
@@ -1026,8 +1012,8 @@ export class TileMap<T extends object = any> {
 
   private drawLine(
     context: CanvasRenderingContext2D,
-    start: vec,
-    end: vec,
+    start: vec2,
+    end: vec2,
     colour: string,
     lineWidth: number
   ) {
@@ -1046,7 +1032,7 @@ export class TileMap<T extends object = any> {
 
   private drawCross(
     context: CanvasRenderingContext2D,
-    position: vec,
+    position: vec2,
     colour: string,
     lineWidth: number,
     size: number
@@ -1075,12 +1061,15 @@ export class TileMap<T extends object = any> {
  * @see https://www.npmjs.com/package/@basementuniverse/content-manager
  */
 export async function tileMapOptionsContentProcessor<T extends object = any>(
-  content: Record<string, {
-    name: string;
-    type: string;
-    content: any;
-    status: number;
-  }>,
+  content: Record<
+    string,
+    {
+      name: string;
+      type: string;
+      content: any;
+      status: number;
+    }
+  >,
   data: {
     name: string;
     type: string;
@@ -1091,10 +1080,9 @@ export async function tileMapOptionsContentProcessor<T extends object = any>(
     decompressData: boolean;
   }>
 ): Promise<void> {
-  const getImageFromContent = (name: string):
-    | HTMLImageElement
-    | HTMLCanvasElement
-    | null => {
+  const getImageFromContent = (
+    name: string
+  ): HTMLImageElement | HTMLCanvasElement | null => {
     const image = content[name]?.content;
     if (!image) {
       throw new Error(`Image '${name}' not found`);

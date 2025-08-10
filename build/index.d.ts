@@ -1,4 +1,4 @@
-import { vec } from '@basementuniverse/vec';
+import { vec2 } from '@basementuniverse/vec';
 import { Rectangle } from './bitmap-decompose';
 export type TileMapOptionsData<T extends object = any> = Partial<Omit<TileMapOptions, 'preRender' | 'postRender' | 'preGenerateChunk' | 'postGenerateChunk' | 'debug'>> & {
     layers?: TileMapLayerOptionsData<T>[];
@@ -83,13 +83,13 @@ export type TileMapOptions<T extends object = any> = {
      *
      * @param context The context that the tilemap is being rendered into
      */
-    preRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec, position: vec, scale?: number) => void;
+    preRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec2, position: vec2, scale?: number) => void;
     /**
      * Optional hook called after rendering the tilemap
      *
      * @param context The context that the tilemap is being rendered into
      */
-    postRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec, position: vec, scale?: number) => void;
+    postRender?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, screen: vec2, position: vec2, scale?: number) => void;
     /**
      * Optional hook called before generating a chunk
      *
@@ -102,14 +102,14 @@ export type TileMapOptions<T extends object = any> = {
      *
      * @param context A context for the chunk's canvas
      */
-    preGenerateChunk?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk | [TileMapChunk, boolean];
+    preGenerateChunk?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec2) => TileMapChunk | [TileMapChunk, boolean];
     /**
      * Optional hook called after generating a chunk
      *
      * @param canvas The chunk's canvas
      * @param context A context for the chunk's canvas
      */
-    postGenerateChunk?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec) => TileMapChunk;
+    postGenerateChunk?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, tileBounds: Bounds, chunkPosition: vec2) => TileMapChunk;
     /**
      * Optional debug options
      *
@@ -162,7 +162,7 @@ export type TileMapLayerOptions<T extends object = any> = {
      *
      * @param context A context for the current chunk's canvas
      */
-    preRenderTile?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec, tilePosition: vec) => void;
+    preRenderTile?: (context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec2, tilePosition: vec2) => void;
     /**
      * Optional hook called after rendering a tile
      *
@@ -172,7 +172,7 @@ export type TileMapLayerOptions<T extends object = any> = {
      * @param canvas The current chunk's canvas
      * @param context A context for the current chunk's canvas
      */
-    postRenderTile?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec, tilePosition: vec) => void;
+    postRenderTile?: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, tileMap: TileMap<T>, layer: TileMapLayerOptions<T>, chunkPosition: vec2, tilePosition: vec2) => void;
 };
 type TileMapDebugOptions = {
     showOrigin: boolean;
@@ -184,11 +184,11 @@ export type Bounds = {
     /**
      * The top-left corner of the tile map, measured in tiles
      */
-    topLeft: vec;
+    topLeft: vec2;
     /**
      * The bottom-right corner of the tile map, measured in tiles
      */
-    bottomRight: vec;
+    bottomRight: vec2;
 };
 export declare enum TileAlignment {
     TopLeft = "top-left",
@@ -208,7 +208,7 @@ export type TileDefinition<T extends object = any> = {
 } & T;
 type TileMapImage = HTMLImageElement | HTMLCanvasElement;
 type TileMapChunk = {
-    chunkPosition: vec;
+    chunkPosition: vec2;
     image: HTMLCanvasElement;
 };
 /**
@@ -220,8 +220,8 @@ type TileMapChunk = {
  * @see https://www.npmjs.com/package/@basementuniverse/camera
  */
 interface Camera {
-    position: vec;
-    readonly actualPosition: vec;
+    position: vec2;
+    readonly actualPosition: vec2;
     scale: number;
     readonly actualScale: number;
     bounds: {
@@ -232,7 +232,7 @@ interface Camera {
     };
 }
 export declare function cameraBoundsToTileMapBounds(bounds: Camera['bounds']): Bounds;
-export declare function cameraBoundsSize(bounds: Camera['bounds']): vec;
+export declare function cameraBoundsSize(bounds: Camera['bounds']): vec2;
 export declare class TileMap<T extends object = any> {
     private static readonly DEFAULT_OPTIONS;
     private static readonly DEFAULT_LAYER_OPTIONS;
@@ -267,13 +267,13 @@ export declare class TileMap<T extends object = any> {
      *
      * If no tile exists at this position, return null
      */
-    getTileAtPosition(position: vec, layerName?: string): TileDefinition<T> | null | {
+    getTileAtPosition(position: vec2, layerName?: string): TileDefinition<T> | null | {
         [name: string]: TileDefinition<T> | null;
     };
     private getTileAtPositionInLayer;
     private hashVector;
     draw(context: CanvasRenderingContext2D, camera: Camera): void;
-    draw(context: CanvasRenderingContext2D, screen: vec, position: vec, scale: number): void;
+    draw(context: CanvasRenderingContext2D, screen: vec2, position: vec2, scale: number): void;
     private performDraw;
     private generateChunk;
     private drawLine;

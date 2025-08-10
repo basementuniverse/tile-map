@@ -2,20 +2,25 @@
   "name": "@basementuniverse/tile-map",
   "version": "1.1.0",
   "description": "Render 2d tile maps with layers, chunk rendering, tilesets, procedural generation, etc.",
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
-  "scripts": {
-    "build": "webpack"
-  },
   "author": "Gordon Larrigan <gordonlarrigan@gmail.com> (https://gordonlarrigan.com)",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/basementuniverse/tile-map.git"
   },
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "bitmap-decompose.ts",
+    "encode-rle.ts"
+  ],
+  "scripts": {
+    "build": "webpack"
+  },
   "dependencies": {
-    "@basementuniverse/utils": "^1.4.0",
-    "@basementuniverse/vec": "^1.0.0",
+    "@basementuniverse/utils": "^1.7.0",
+    "@basementuniverse/vec": "^2.3.5",
     "fast-rle": "^0.1.0",
     "lru_map": "^0.4.1"
   },
